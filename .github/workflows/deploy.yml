@@ -1,0 +1,39 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Deploy to server
+      env:
+        DEPLOY_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        SERVER_IP: ${{ secrets.SERVER_IP }}
+        SERVER_USER: ${{ secrets.SERVER_USERNAME }}
+        SERVER_DIR: ${{ secrets.SERVER_DIR }}
+        LOGFILE_DIR: ${{ secrets.LOGFILE_DIR }}
+      run: |
+        echo "$DEPLOY_KEY" > deploy_key
+        chmod 600 deploy_key
+        
+        # SSH into the server and pull latest changes
+        ssh -o StrictHostKeyChecking=no -i deploy_key $SERVER_USER@$SERVER_IP <<EOF
+          cd $SERVER_DIR
+          git reset --hard origin/main
+          git pull origin main
+          
+          # Restart the Go application
+          pkill tg_bot || true
+          go build -o tg_bot
+          nohup ./tg_bot > $LOGFILE_DIR 2>&1 &
+        EOF
+
+        rm -f deploy_key
